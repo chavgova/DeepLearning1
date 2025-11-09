@@ -31,6 +31,7 @@ from modules import CrossEntropyModule
 import cifar10_utils
 
 import torch
+import matplotlib.pyplot as plt
 
 
 def accuracy(predictions, targets):
@@ -53,7 +54,13 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    
+    
+    pred_labels =np.argmax(predictions, axis=1)
+    if targets.ndim > 1:
+        targets = np.argmax(targets, axis=1) 
+    accuracy = np.mean(pred_labels==targets)  
+    
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -81,7 +88,24 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    num_correct =0.0
+    num_examples = 0
+  
+    
+    for x, y in data_loader:  
+        preds = model.forward(x)  
+        
+        if y.ndim > 1:
+            y_eval = np.argmax(y, axis=1)
+        else:
+            y_eval=y
+            
+        num_correct += np.sum(np.argmax(preds,axis=1) == y_eval)
+        num_examples +=y_eval.shape[0] 
+        
+    avg_accuracy = num_correct/float(num_examples)  # correct/total accuracy calculation
+    
+    
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -134,15 +158,62 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     # PUT YOUR CODE HERE  #
     #######################
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    
+    n_inputs = 3*32*32
+    n_classes = 10
+    model = MLP(n_inputs=n_inputs, n_hidden=hidden_dims, n_classes=n_classes)
+    loss_module = CrossEntropyModule()
+
+    val_accuracies = []  # all of these are for collecting the stats we need later for the plots
+    train_accuracies =[]
+    train_losses = []
+
+    best_val =  -1.0   # I have the habbit of saving the best model so I ususally add these 
+    best_model = None
+
+    for ep in range(epochs):
+        epoch_losses =[ ]
+        epoch_correct = 0
+        epoch_total = 0
+
+        for x, y in cifar10_loader['train']:
+            out= model.forward(x)
+            loss= loss_module.forward(out, y)
+            epoch_losses.append(loss) 
+
+            if y.ndim > 1:
+                y_idx = np.argmax(y, axis=1)
+            else:
+                y_idx = y
+                
+            epoch_correct += np.sum(np.argmax(out, axis=1) == y_idx)
+            epoch_total += y_idx.shape[0]
+
+            dloss = loss_module.backward(out, y)
+            model.backward(dloss)
+
+            for m in model.modules:
+                if hasattr(m, 'params') and m.params['weight'] is not None:
+                    m.params['weight'] -= lr * m.grads['weight']
+                    m.params['bias']-= lr * m.grads['bias']
+
+        train_losses.append(float(np.mean(epoch_losses)))
+        train_accuracies.append(epoch_correct / float(epoch_total))
+
+        val_acc = evaluate_model(model, cifar10_loader['validation'])
+        val_accuracies.append(val_acc)
+
+        if val_acc > best_val:  
+            best_val=val_acc
+            best_model = deepcopy(model) # I have the habbit of saving the best model just in case although not needed here 
+
+    test_accuracy = evaluate_model(best_model, cifar10_loader['test'])
+    
+    logging_dict = {
+        'train_loss': train_losses,'train_acc': train_accuracies,
+        'val_acc': val_accuracies, 'test_acc': test_accuracy}
+    
+    
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -175,6 +246,28 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
-    # Feel free to add any additional functions, such as plotting of the loss curve here
-    
+    model, val_accuracies, test_accuracy, logging = train(**kwargs)
+ 
+    epochs= np.arange(1, len(logging["train_loss"]) +1)
+    plt.figure()
+    plt.plot(epochs,logging["train_loss"])   
+    plt.ylabel("Training Loss") 
+    plt.xlabel("Epoch")
+    plt.title("MLP Training loss ")  
+    plt.grid(True) 
+    plt.tight_layout() 
+    plt.show() 
+         
+    plt.figure() 
+    plt.plot(epochs, logging["train_acc"], label="Train")
+    plt.plot(epochs, logging["val_acc"], label="Validation")   
+    plt.ylabel("Accuracy")  
+    plt.xlabel("Epoch")
+    plt.title(f"Accuracy [best test acc={logging['test_acc']:.2f}]")
+    plt.legend()  
+    plt.grid(True) 
+    plt.tight_layout()
+    plt.show()
+
+
+

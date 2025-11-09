@@ -52,7 +52,19 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        
+        self.modules = []
+        in_dim = n_inputs
+
+        for i, h in enumerate(n_hidden):  # this is in case of multiple layers but in the assignment we use omly 1
+            self.modules.append(LinearModule(in_dim,h, input_layer=(i == 0)))
+            self.modules.append(ELUModule(alpha=1.0))
+            in_dim=h
+
+        self.modules.append( LinearModule(in_dim,n_classes, input_layer=(len(n_hidden) ==0)) )  
+        self.modules.append(SoftMaxModule()) 
+        
+        
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -74,7 +86,16 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        
+        if x.ndim > 2:  
+            x = x.reshape(x.shape[0], -1)
+            
+        out=x
+        
+        for m in self.modules: 
+            out = m.forward(out) # we use the implemented forward module 
+            
+            
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -95,7 +116,15 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        
+        dx = dout
+        
+        for m in reversed(self.modules):
+            dx = m.backward(dx) # we use the implemented backward module 
+        return dx
+      
+      
+      
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -112,7 +141,12 @@ class MLP(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        
+        
+        for m in self.modules:
+            if hasattr(m, "clear_cache"):
+                m.clear_cache()
+                
         #######################
         # END OF YOUR CODE    #
         #######################

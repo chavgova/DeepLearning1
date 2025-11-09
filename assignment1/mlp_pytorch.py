@@ -59,7 +59,28 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        super().__init__()
+        
+        layers = OrderedDict()
+        in_dim=n_inputs
+        
+        for i, h in enumerate(n_hidden):   
+            layers[f"linear_{i}"] = nn.Linear(in_dim, h) 
+            if use_batch_norm:   # I kept the last version of the code after question 5f where the batch norm is used 
+                layers[f"bn_{i}"]=nn.BatchNorm1d(h)  
+            layers[f"elu_{i}"] = nn.ELU()  
+            in_dim=h
+            
+        layers["linear_out"]  = nn.Linear(in_dim,n_classes)
+        self.net =nn.Sequential(layers)
+
+        for m in self.modules():
+          
+            if isinstance(m, nn.Linear): 
+                nn.init.kaiming_normal_(m.weight, nonlinearity="relu")  # this is a default initialization and using standard relu 
+                nn.init.zeros_(m.bias)  
+                
+                
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -81,7 +102,12 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-
+        
+        if x.dim()>2:   
+            x = x.view(x.size(0), -1)
+        out = self.net(x)  # this is the forward pass for 1 layer net
+        
+        
         #######################
         # END OF YOUR CODE    #
         #######################

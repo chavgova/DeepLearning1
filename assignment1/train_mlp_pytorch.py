@@ -32,6 +32,7 @@ import cifar10_utils
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import matplotlib.pyplot as plt
 
 
 def accuracy(predictions, targets):
@@ -54,7 +55,12 @@ def accuracy(predictions, targets):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    
+    pred_labels = np.argmax(predictions, axis=1)
+    acc = np.mean(pred_labels == targets)
+    accuracy = acc
+     
+    
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -82,7 +88,25 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    model.eval()
+    total_correct =0
+    total_samples =0
+    
+  
+    with torch.no_grad():
+        for x, y in data_loader:  
+            x = x.to(model.device) 
+            y = y.to(model.device)  
+            
+            logits =  model(x)   
+            preds = logits.argmax(dim=1)
+            total_correct += (preds==y).sum().item()
+            total_samples+=y.size(0)
+            
+    avg_accuracy = total_correct/float(total_samples) # correct/total accuracy calculation
+    
+    
+    
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -144,16 +168,59 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     # PUT YOUR CODE HERE  #
     #######################
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    # TODO: Do optimization with the simple SGD optimizer
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    n_inputs =3*32*32  
+    n_classes = 10
+
+    model = MLP(n_inputs=n_inputs, n_hidden=hidden_dims, n_classes=n_classes, use_batch_norm=use_batch_norm).to(device)
+    loss_module = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=lr)  # i use the standard sgd optimizer
+
+    val_accuracies= []  # all of these are for collecting the stats we need later for the plots
+    train_accuracies= []  
+    train_losses = []  
+  
+    best_val = -1.0  # I have the habbit of saving the best model so I ususally add these 
+    best_model = None
+
+    for ep in range(epochs):
+        model.train()
+        epoch_loss_sum =0.0
+        epoch_samples =0
+        epoch_correct =0
+
+        for x, y in cifar10_loader['train']:
+            x = x.to(device) 
+            y = y.to(device)
+  
+            optimizer.zero_grad()
+            logits = model(x)
+            loss =loss_module(logits,y)  
+            loss.backward()   
+            optimizer.step()   
+ 
+            bs = y.size(0)
+            epoch_loss_sum+=loss.item()*bs
+            epoch_samples += bs
+            epoch_correct +=(logits.argmax(dim=1) ==  y).sum().item() 
+ 
+        train_losses.append(epoch_loss_sum/float(epoch_samples))
+        train_accuracies.append(epoch_correct/float(epoch_samples))  
+
+        val_acc = evaluate_model(model, cifar10_loader['validation'])
+        val_accuracies.append(val_acc)
+
+        if val_acc>best_val:   # i add this to save the best model 
+            best_val = val_acc
+            best_model = deepcopy(model) # I have the habbit of saving the best model just in case although not needed here 
+
+    model = best_model.to(device)
+    test_accuracy = evaluate_model(model, cifar10_loader['test'])
+    
+    logging_dict = {
+        'train_loss': train_losses,'train_acc': train_accuracies,
+        'val_acc': val_accuracies, 'test_acc': test_accuracy}
+    
+    
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -188,6 +255,30 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
-    # Feel free to add any additional functions, such as plotting of the loss curve here
+    model, val_accs, test_acc, logging = train(**kwargs)
+
+
+    epochs = np.arange(1, len(logging["train_loss"]) +1)
     
+    
+    plt.figure()
+    plt.plot(epochs, logging["train_loss"])   
+    plt.ylabel("Training Loss") 
+    plt.xlabel("Epoch")
+    plt.title("Pytorch Training loss (with batch norm)")  # I kept the last version of the code after question 5f where the batch norm is used 
+    plt.grid(True) 
+    plt.tight_layout() 
+    plt.show() 
+         
+    plt.figure() 
+    plt.plot(epochs, logging["train_acc"], label="Train")
+    plt.plot(epochs, logging["val_acc"], label="Validation")   
+    plt.ylabel("Accuracy")  
+    plt.xlabel("Epoch")
+    plt.title(f"Accuracy Pytorch [best test acc={logging['test_acc']:.2f}] (with batch norm)")
+    plt.legend()  
+    plt.grid(True) 
+    plt.tight_layout()
+    plt.show()
+
+
