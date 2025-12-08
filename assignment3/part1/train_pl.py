@@ -70,10 +70,28 @@ class VAE(pl.LightningModule):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        L_rec = None
-        L_reg = None
-        bpd = None
-        raise NotImplementedError
+        
+        batch_size = imgs.size(0) 
+        
+        mean, log_std = self.encoder(imgs)  
+        std = torch.exp(log_std)
+        
+        z = sample_reparameterize(mean, std) # the trickkk 
+        logits = self.decoder(z)  
+        targets = imgs.squeeze(1) 
+        
+        rec_pixel = F.cross_entropy(logits, targets, reduction="none") # not sure about the reduction param
+        rec_sample = rec_pixel.view(batch_size, -1).sum(dim=1)  
+        L_rec = rec_sample.mean()
+        
+        reg_sample = KLD(mean, log_std)      
+        L_reg = reg_sample.mean()
+        
+        elbo_sample = rec_sample + reg_sample
+        bpd_sample = elbo_to_bpd(elbo_sample, imgs.shape)
+        
+        bpd = bpd_sample.mean() 
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -91,8 +109,18 @@ class VAE(pl.LightningModule):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        x_samples = None
-        raise NotImplementedError
+        
+
+        z = torch.randn(batch_size, self.hparams.z_dim, device=self.device)  
+        probs = F.softmax(self.decoder(z) , dim=1) 
+
+        b,c,h,w = probs.shape
+        probs_flat= probs.permute(0, 2,3,1).reshape(-1, c)  
+        samples_flat = torch.multinomial(probs_flat, num_samples=1).squeeze(1)  
+
+        x_samples = samples_flat.view(b,h,w).unsqueeze(1).long()
+        
+        
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -243,7 +271,7 @@ if __name__ == '__main__':
                         help='Max number of epochs')
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
-    parser.add_argument('--num_workers', default=4, type=int,
+    parser.add_argument('--num_workers', default=0, type=int,
                         help='Number of workers to use in the data loaders. To have a truly deterministic run, this has to be 0. ' + \
                              'For your assignment report, you can use multiple workers (e.g. 4) and do not have to set it to 0.')
     parser.add_argument('--log_dir', default='VAE_logs', type=str,

@@ -35,8 +35,8 @@ def sample_reparameterize(mean, std):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    z = None
-    raise NotImplementedError
+    z = mean + std*torch.randn_like(std)
+
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -58,8 +58,11 @@ def KLD(mean, log_std):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    KLD = None
-    raise NotImplementedError
+    
+    var = torch.exp(log_std*2)
+    
+    KLD = 0.5 * (var+mean**2 -1.0 -2.0 *log_std)
+    KLD = KLD.sum(dim=-1)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -78,8 +81,12 @@ def elbo_to_bpd(elbo, img_shape):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    bpd = None
-    raise NotImplementedError
+    
+    bla, c,h,w = img_shape
+    
+    bpd = elbo* np.log2(np.e)/ (c*h*w)
+
+
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -110,8 +117,22 @@ def visualize_manifold(decoder, grid_size=20):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    img_grid = None
-    raise NotImplementedError
+    
+    p = torch.linspace(0.5 / grid_size,(grid_size - 0.5) / grid_size, grid_size, device=decoder.device)
+    z_line = torch.sqrt( torch.tensor(2.0, device=decoder.device))*torch.erfinv(2 * p-1)
+    z1, z2 = torch.meshgrid(z_line, z_line, indexing="xy")
+    
+    logits = decoder(torch.stack( [z1.reshape(-1),z2.reshape(-1)], dim=1))  
+    probs = torch.softmax(logits, dim=1) 
+    
+    K = probs.size(1)
+    values = torch.arange(K, device=decoder.device, dtype=probs.dtype).view(1, K, 1, 1)
+    mean_imgs = (probs * values).sum(dim=1, keepdim=True) / (K - 1) 
+    
+    img_grid = make_grid( mean_imgs,nrow=grid_size, normalize=False,pad_value=0.5)
+
+
+
     #######################
     # END OF YOUR CODE    #
     #######################
